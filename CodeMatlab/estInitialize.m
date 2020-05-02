@@ -16,9 +16,9 @@ function [internalState, studentNames, estimatorType] = estInitialize
 % and angle, and probably you'll remove the color.
 internalState.x = 0;
 internalState.y = 0;
-internalState.theta = pi/4; % rad
+internalState.theta = pi/4; % rad, 'North East init'
 
-studentNames = ['Kirsten Biermayer, Rebecca Schwartz']
+studentNames = ['Kristen Biermayer, Rebecca Schwartz']
 
 % replace this with the estimator type. Use one of the following options:
 %  'EKF' for Extended Kalman Filter
