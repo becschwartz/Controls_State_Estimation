@@ -57,10 +57,13 @@ vel = 5*pedalSpeed*r; % non directional linear speed of bike
 
 % Measurement update? 
 % MEASUREMENT GIVEN (z(k))
+isMeas = true; % measurement assumed to be given
 if ~isnan(measurement(1)) & ~isnan(measurement(2))
     % have a valid measurement
     x_meas = measurement(1);
     y_meas = measurement(2);
+else
+    isMeas = false; % no measurement given
     % theta = theta; %+ 1;
 % else
 %     rand_val_n = randn(1); % use same randn for NORMAL NOISE
@@ -127,8 +130,9 @@ z = zeros(size(x0,1),n);
 
 Xmm(:,1) = x0;              % first measurement is x0
 Xmv(:,:,1) = P0;            % first predicted variance is P0
-z = [x_meas,y_meas,theta];               % given z(1); z(2) in MATLAB
-
+if isMeas == true % if there are measurements 
+    z = [x_meas,y_meas,theta];               % given z(1); z(2) in MATLAB
+end
 
 %% 1b
 % Prior with Jacobian matrices A,L
@@ -212,26 +216,25 @@ M = 1; % JACOBIAN M PROBABLY CHANGE?
 Xpm(:,2) = [Xmm(1) + vel*cos(Xmm(3))*dt + v(1);
             Xmm(2) + vel*sin(Xmm(3))*dt + v(2);
             Xmm(3) + (vel/B)*tan(gamma)*dt + v(3)]; % Solve for the predicted Mean
+if isMeas == true % if there are measurement values, update... 
+     A = [1, 0, 0; 
+          0, 1, 0;
+         -vel*dt*sin(Xmm(3)), vel*dt*cos(Xmm(3)), 1];
 
- A = [1, 0, 0; 
-      0, 1, 0;
-     -vel*dt*sin(Xmm(3)), vel*dt*cos(Xmm(3)), 1];
-       
-L = eye(3);    % JACOBIAN L
-Xpv(:,:,2) = A*Xmv(:,:,1)*A + L*V*L'; % Solve for the predicted Variance
-H = [1,1,1]; % JACOBIAN H
-K(:,2) = Xpv(:,:,2)*H'*inv(H*Xpv(:,:,2)*H' + M*W*M');    % Kalman Gain
-Xmm(:,2) = Xpm(:,2) + K(:,2).*(z - Xpm(:,2)); % Solve for the measured mean
-Xmv = (eye(size(K,1)) - K(:,2)*H)*Xpv(:,:,2);       % solve for measured variance of y
-
-
-x = Xmm(1,2);
-y = Xmm(2,2);
-theta = Xmm(3,2);
-
-
-
-
+    L = eye(3);    % JACOBIAN L
+    Xpv(:,:,2) = A*Xmv(:,:,1)*A + L*V*L'; % Solve for the predicted Variance
+    H = [1,1,1]; % JACOBIAN H
+    K(:,2) = Xpv(:,:,2)*H'*inv(H*Xpv(:,:,2)*H' + M*W*M');    % Kalman Gain
+    Xmm(:,2) = Xpm(:,2) + K(:,2).*(z' - Xpm(:,2)); % Solve for the measured mean
+    Xmv = (eye(size(K,1)) - K(:,2)*H)*Xpv(:,:,2);       % solve for measured variance of y
+    x = Xmm(1,2);
+    y = Xmm(2,2);
+    theta = Xmm(3,2);
+else
+    x = Xpm(1,2);
+    y = Xpm(2,2);
+    theta = Xpm(3,2);
+end
 
 
 

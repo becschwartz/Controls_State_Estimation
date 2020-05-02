@@ -61,6 +61,8 @@ if ~isnan(measurement(1)) & ~isnan(measurement(2))
     % have a valid measurement
     x_meas = measurement(1);
     y_meas = measurement(2);
+else
+    no_mas
     % theta = theta; %+ 1;
 % else
 %     rand_val_n = randn(1); % use same randn for NORMAL NOISE
@@ -221,7 +223,7 @@ L = eye(3);    % JACOBIAN L
 Xpv(:,:,2) = A*Xmv(:,:,1)*A + L*V*L'; % Solve for the predicted Variance
 H = [1,1,1]; % JACOBIAN H
 K(:,2) = Xpv(:,:,2)*H'*inv(H*Xpv(:,:,2)*H' + M*W*M');    % Kalman Gain
-Xmm(:,2) = Xpm(:,2) + K(:,2)*(z - Xpm(:,2)); % Solve for the measured mean
+Xmm(:,2) = Xpm(:,2) + K(:,2).*(z' - Xpm(:,2)); % Solve for the measured mean
 Xmv = (eye(size(K,1)) - K(:,2)*H)*Xpv(:,:,2);       % solve for measured variance of y
 
 
