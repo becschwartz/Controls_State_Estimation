@@ -30,14 +30,16 @@ gamma = steeringAngle;
 % VALUES WITH KNOWN UNCERTAINTY
 % Tire Radius
 r = 0.425; % tire radius (m); uncertainty is +- 5%
-r_low = 4 - 0.05*r;
-r_high = 4 + 0.05*4;
+r_low = r - 0.05*r;
+r_high = r + 0.05*r;
+var_r = 0.5*((r_low-r)^2 + (r_high-r)^2);
 % % tire_radius = r + 0.05*r*randn(1); % FOR NORMAL NOISE
 % tire_radius = r_low + (r_high - r_low)*rand(1); % FOR UNIFORM NOISE
 % Wheel Base
 B = 0.8; % wheel base length (m); uncertainty is +- 10%
 B_low = B - 0.1*B;
 B_high = B + 0.1*B;
+var_B = 0.5*((B_low-r)^2 + (B_high-r)^2);
 % POSITION OF CENTER OF BIKE
 % x = x+0.5*(B + 0.1*B*rand_val_n)*cos(theta); % NORMAL NOISE
 % y = y+0.5*(B + 0.1*B*rand_val_n)*sin(theta); % NORMAL NOISE
@@ -92,8 +94,8 @@ end
 %   q(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
 %                       x2(k-1) + vel(k-1)*sin(x3(k-1))*dt + v2(k-1);
 %                       x3(k-1) + (vel(k-1)/B)*tan(gamma(k-1))*dt + v3(k-1)]
-%   h(x(k),w(k)) = [x1(k)+ w1(k);
-%                   x2(k) + w2(k)]
+%   h(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k)) + w1(k);
+%                   x2(k)+ 0.5*B*sin(x3(k)) + w1(k);
 
 % NOISE
 % NEEDS TO BE ADJUSTED
@@ -112,10 +114,15 @@ x3 = theta;
 x0 = [x1;x2;x3];       % initial mean
 
 % CHANGE 
-P0 = diag([0.5,0.5,0.5]);        % initial variance
-V = diag([0.3,0.3,0.3]);                       % variance of sensor noise
+% NOTE: variances are def higher i think
+% for P0, consider variance for B
+% keeping var_B as variance for theta just as a placeholder
+P0 = diag([var_B,var_B,var_B]);        % initial variance
+% for V, consider variance of r for measurement values
+% keeping var_r as variance for theta just as a placeholder
+V = diag([var_r,var_r,var_r]);         % variance of sensor noise
 
-W = 0.2;                                 % variance of process noise
+W = diag([0,0,0]);    % variance of process noise
 v = [0;0;0];      % initial mean of process noise
 w = 0;                     % initial mean of measurement noise
 n = 2; 
@@ -187,31 +194,35 @@ end
 %   x(k) = q(x(k-1),v(k-1))
 %   z(k) = h(x(k),w(k))
 % where
-%   h(x(k),w(k)) = x1(k) + w1(k)
-%                = x2(k) + w2(k)
-%                = x3(k) + w3(k)
+%   h(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k)) + w1(k);
+%                   x2(k)+ 0.5*B*sin(x3(k)) + w1(k);
+%                   x3(k) + w3(k)];
 
 % H calculated using partial derivatives... 
-% H1 = pd(h(xp,w))/x1 = 1
-% H2 = pd(h(xp,w))/x2 = 1
-% H3 = pd(h(xp,w))/x3 = 1
+% H1 = pd(h(xp,w))/x1 = [1; 0; -0.5*B*sin(x3(k))]
+% H2 = pd(h(xp,w))/x2 = [0; 1; 0.5*B*cos(x3(k))]
+% H3 = pd(h(xp,w))/x3 = [0; 0; 1]
 
 % JACOBIAN H MATRIX
-% H(k) = [1,1,1]
+% H(k) = [1, 0, 0;
+%         0, 1, 0;
+%        -0.5*B*sin(x3(k)), 0.5*B*cos(x3(k)), 1]
 
 
 % PROBABLY CHANGE
 % M calculated using partial derivatives...
-% M = pd(h(x,w)/w = 1
+% M1 = pd(q(x,v))/w1 = [1;0;0]
+% M2 = pd(q(x,v))/w2 = [0;1;0]
+% M3 = pd(q(x,v))/w3 = [0;0;1]
 
 % JACOBIAN M MATRIX
-% M = 1 PROBABLY CHANGE
+% M = eye(3)
 
 
 %% 1d 
 % SOLVE IT YO: xmhat(1) given z(1) = 0.5 
 
-M = 1; % JACOBIAN M PROBABLY CHANGE?
+M = eye(3); % JACOBIAN M PROBABLY CHANGE?
 
 Xpm(:,2) = [Xmm(1) + vel*cos(Xmm(3))*dt + v(1);
             Xmm(2) + vel*sin(Xmm(3))*dt + v(2);
@@ -223,7 +234,9 @@ if isMeas == true % if there are measurement values, update...
 
     L = eye(3);    % JACOBIAN L
     Xpv(:,:,2) = A*Xmv(:,:,1)*A + L*V*L'; % Solve for the predicted Variance
-    H = [1,1,1]; % JACOBIAN H
+    H = [1, 0, 0;
+         0, 1, 0;
+        -0.5*B*sin(Xmm(3)), 0.5*B*cos(Xmm(3), 1]; % JACOBIAN H
     K(:,2) = Xpv(:,:,2)*H'*inv(H*Xpv(:,:,2)*H' + M*W*M');    % Kalman Gain
     Xmm(:,2) = Xpm(:,2) + K(:,2).*(z' - Xpm(:,2)); % Solve for the measured mean
     Xmv = (eye(size(K,1)) - K(:,2)*H)*Xpv(:,:,2);       % solve for measured variance of y
