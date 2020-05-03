@@ -24,7 +24,7 @@ x = internalStateIn.x;
 y = internalStateIn.y;
 theta = internalStateIn.theta;
 
-if (time ~= 0 && exist('Xmv','var') == 1)
+if time ~= 0
     Xmv = internalStateIn.Xmv;
 end
 
@@ -36,17 +36,14 @@ gamma = steeringAngle;
 r = 0.425; % tire radius (m); uncertainty is +- 5%
 r_low = r - 0.05*r;
 r_high = r + 0.05*r;
-var_r = 0.5*((r_low-r)^2 + (r_high-r)^2); % standard variance 
-% NORMAL/ UNIFORM VARIANCE? 
+var_r = ((r_high - r)/3)^2; % GAUSSIAN NOISE: where 3 is the desired z value on z scale
 vel = 5*pedalSpeed*r; % expected value, non directional linear speed of bike
 
 % Wheel Base
 B = 0.8; % wheel base length (m); uncertainty is +- 10%
 B_low = B - 0.1*B;
 B_high = B + 0.1*B;
-var_B = 0.5*((B_low-r)^2 + (B_high-r)^2); % standard variance
-% NORMAL/ UNIFORM VARIANCE? 
-
+var_B = ((B_high - B)/3)^2; % GAUSSIAN NOISE: where 3 is the desired z value on z scale
 
 % VALUES WITH UNCERTAINTY, EXACT UNCERTAINTY UNKNOWN
 % ...
@@ -97,17 +94,15 @@ x0 = [x1;x2;x3];       % initial mean
 
 if time == 0
     P0 = diag([var_r + var_B, var_r + var_B, var_B]);   % initial variance
-elseif (time ~= 0 && exist('Xmv','var') == 1)
+elseif (time ~= 0 )
     P0 = Xmv;
-else 
-    P0 = diag([var_r + var_B, var_r + var_B, var_B]);  
 end
 
 % for V, consider variance of r for measurement values
 % keeping var_r as variance for theta just as a placeholder
-V = diag([0.1,0.1,0.1]);    % variance of sensor noise
+V = diag([0.01,0.01,0.01]);    % variance of sensor noise
 
-W = diag([0.1,0.1,0.1]);    % variance of process noise
+W = diag([0.01,0.01,0.01]);    % variance of process noise
 v = [0;0;0];      % initial mean of process noise
 w = 0;           % initial mean of measurement noise
 n = 2; 
@@ -121,7 +116,7 @@ K = zeros(size(P0,1),size(P0,2),n);      % Kalman gain
 z = zeros(size(x0,1),n);
 
 Xmm(:,1) = x0;              % first measurement is x0
-Xmv(:,:,1) = P0;            % first predicted variance is P0
+Xmv(:,:,1) = P0(:,:,1);            % first predicted variance is P0
 if isMeas == true % if there are measurements 
     z = [x_meas,y_meas,theta];               % given z(1); z(2) in MATLAB
 end
@@ -264,10 +259,10 @@ end
 
 internalStateOut.x = x;
 internalStateOut.y = y;
-internalStateOut.theta = theta;
-if isMeas == true
-    internalStateOut.Xmv = Xmv;
-end
+internalStateOut.theta = theta ;
+internalStateOut.Xmv = Xmv;
+
+
 
 
 end
