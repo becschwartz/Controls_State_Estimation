@@ -12,7 +12,7 @@
 % Provide the index of the experimental run you would like to use. Note
 % that using "0" means that you will load the measurement calibration data.
 
-experimentalRun = 1;
+experimentalRun = 1;    
 fprintf(['Loading the data file #' num2str(experimentalRun) ' \n']);
 filename = ['data/run_' num2str(experimentalRun,'%03d') '.csv'];
 experimentalData = csvread(filename);
@@ -39,7 +39,7 @@ dt = experimentalData(2,1) - experimentalData(1,1);
 loops = 0;
 for k = 1:numDataPoints
     loops = loops + 1; 
-    %fprintf('This is loop # %d\n',loops) % track number of loops
+    fprintf('This is loop # %d\n',loops) % track number of loops
     t = experimentalData(k,1);
     gamma = experimentalData(k,2);
     omega = experimentalData(k,3);
@@ -61,13 +61,12 @@ estimatedAngle = mod(estimatedAngle+pi,2*pi)- pi;
 
 posErr_x = estimatedPosition_x - experimentalData(:,6);
 posErr_y = estimatedPosition_y - experimentalData(:,7);
-angErr   = mod(estimatedAngle - experimentalData(:,8) + pi, 2*pi) - pi;
+angErr = mod(estimatedAngle - experimentalData(:,8) + pi, 2*pi) - pi;
 
 fprintf('Final error: \n');
 fprintf(['   pos x = ' num2str(posErr_x(end)) ' m \n']);
 fprintf(['   pos y = ' num2str(posErr_y(end)) ' m \n']);
 fprintf(['   angle = ' num2str(angErr(end)) ' rad \n']);
-
 
 ax = sum(abs(posErr_x))/numDataPoints;
 ay = sum(abs(posErr_y))/numDataPoints;

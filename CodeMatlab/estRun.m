@@ -24,6 +24,10 @@ x = internalStateIn.x;
 y = internalStateIn.y;
 theta = internalStateIn.theta;
 
+if (time ~= 0 && exist('Xmv','var') == 1)
+    Xmv = internalStateIn.Xmv;
+end
+
 % GIVEN
 gamma = steeringAngle;
 
@@ -90,12 +94,20 @@ x0 = [x1;x2;x3];       % initial mean
 % NOTE: variances are def higher i think
 % for P0, consider variance for B
 % keeping var_B as variance for theta just as a placeholder
-P0 = diag([var_r + var_B, var_r + var_B, var_B]);        % initial variance
+
+if time == 0
+    P0 = diag([var_r + var_B, var_r + var_B, var_B]);   % initial variance
+elseif (time ~= 0 && exist('Xmv','var') == 1)
+    P0 = Xmv;
+else 
+    P0 = diag([var_r + var_B, var_r + var_B, var_B]);  
+end
+
 % for V, consider variance of r for measurement values
 % keeping var_r as variance for theta just as a placeholder
-V = diag([0.1,0.1,0.1]);         % variance of sensor noise
+V = diag([0.1,0.1,0.1]);    % variance of sensor noise
 
-W = diag([0,0,0]);    % variance of process noise
+W = diag([0.1,0.1,0.1]);    % variance of process noise
 v = [0;0;0];      % initial mean of process noise
 w = 0;           % initial mean of measurement noise
 n = 2; 
@@ -233,6 +245,7 @@ if isMeas == true % if there are measurement values, update...
     Xmm(:,2) = Xpm(:,2) + K(:,:,2)*(z' - [Xpm(1,2)+ 0.5*B*cos(Xpm(3,2)); Xpm(2,2)+ 0.5*B*sin(Xpm(3,2)); Xpm(3,2)]); % Solve for the measured mean
     % how do we use this?
     Xmv(:,:,2) = (eye(size(K,1)) - K(:,:,2)*H)*Xpv(:,:,2);       % solve for measured variance of y
+    Xmv = Xmv(:,:,2); 
     x = Xmm(1,2);
     y = Xmm(2,2);
     theta = Xmm(3,2);
@@ -252,6 +265,10 @@ end
 internalStateOut.x = x;
 internalStateOut.y = y;
 internalStateOut.theta = theta;
+if isMeas == true
+    internalStateOut.Xmv = Xmv;
+end
+
 
 end
 
