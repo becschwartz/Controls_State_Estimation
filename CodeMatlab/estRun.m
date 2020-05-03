@@ -56,6 +56,7 @@ if ~isnan(measurement(1)) & ~isnan(measurement(2))
     y_meas = measurement(2);
 else
     isMeas = false; % no measurement given
+    disp('nomeas')
 end
 
 
@@ -97,6 +98,7 @@ if time == 0
 elseif (time ~= 0 )
     P0 = Xmv;
 end
+
 
 % for V, consider variance of r for measurement values
 % keeping var_r as variance for theta just as a placeholder
@@ -245,6 +247,7 @@ if isMeas == true % if there are measurement values, update...
     y = Xmm(2,2);
     theta = Xmm(3,2);
 else
+    Xmv = Xmv(:,:,1);
     x = Xpm(1,2);
     y = Xpm(2,2);
     theta = Xpm(3,2);
@@ -259,9 +262,9 @@ end
 
 internalStateOut.x = x;
 internalStateOut.y = y;
-internalStateOut.theta = theta ;
+internalStateOut.theta = theta;
 internalStateOut.Xmv = Xmv;
-
+disp(Xmv)
 
 
 

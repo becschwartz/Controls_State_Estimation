@@ -12,7 +12,7 @@
 % Provide the index of the experimental run you would like to use. Note
 % that using "0" means that you will load the measurement calibration data.
 
-experimentalRun =80;    
+experimentalRun =1;    
 fprintf(['Loading the data file #' num2str(experimentalRun) ' \n']);
 filename = ['data/run_' num2str(experimentalRun,'%03d') '.csv'];
 experimentalData = csvread(filename);
@@ -39,7 +39,7 @@ dt = experimentalData(2,1) - experimentalData(1,1);
 loops = 0;
 for k = 1:numDataPoints
     loops = loops + 1; 
-    %fprintf('This is loop # %d\n',loops) % track number of loops
+    fprintf('This is loop # %d\n',loops) % track number of loops
     t = experimentalData(k,1);
     gamma = experimentalData(k,2);
     omega = experimentalData(k,3);
