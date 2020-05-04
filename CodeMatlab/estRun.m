@@ -39,30 +39,24 @@ r_low = r - 0.05*r;
 r_high = r + 0.05*r;
 var_r = ((r_high - r)/3)^2; % GAUSSIAN NOISE: where 3 is the desired z value on z scale
 vel = 5*pedalSpeed*r; % expected value, non directional linear speed of bike
-
-% Base length
-B = 0.8; % bike base length (m); uncertainty is +- 10%
+% Wheelbase
+B = 0.8; % wheelbase (m); uncertainty is +- 10%
 B_low = B - 0.1*B;
 B_high = B + 0.1*B;
 var_B = ((B_high - B)/3)^2; % GAUSSIAN NOISE: where 3 is the desired z value on z scale
 
-% VALUES WITH UNCERTAINTY, EXACT UNCERTAINTY UNKNOWN
-% ...
-
 % MEASUREMENT GIVEN (z(k))
 isMeas = true; % measurement assumed to be given
 if ~isnan(measurement(1)) & ~isnan(measurement(2))
-    % have a valid measurement
     x_meas = measurement(1);
     y_meas = measurement(2);
     theta_meas = atan(y_meas/x_meas);
 else
     isMeas = false; % no measurement given
-    % disp('nomeas')
 end
 
 
-%%
+%% DYNAMICS
 % Design an EKF for this 2 state nonlin sys and compute its posteriori
 % estimate, Xmm = [x;y;theta] = [x1,x2,x3] , given measurements 
 
@@ -90,11 +84,6 @@ x2 = y;
 x3 = theta;
 x0 = [x1;x2;x3];       % initial mean
 
-% CHANGE 
-% NOTE: variances are def higher i think
-% for P0, consider variance for B
-% keeping var_B as variance for theta just as a placeholder
-
 if time == 0
     P0 = diag([var_r + var_B, var_r + var_B, var_B]);   % initial variance
 else
@@ -102,12 +91,10 @@ else
     % disp(Xmv)
 end
 
-
-% for V, consider variance of r for measurement values
-% keeping var_r as variance for theta just as a placeholder
+% NOISE
 V = diag([0.1,0.1,0.1]);    % variance of process noise
-
 W = diag([0.1,0.1,0.1]);    % variance of sensor noise
+
 v = [0;0;0];      % initial mean of process noise
 w = 0;           % initial mean of measurement noise
 n = 2; 
@@ -123,11 +110,10 @@ z = zeros(size(x0,1),n);
 Xmm(:,1) = x0;              % first measurement is x0
 Xmv(:,:,1) = P0(:,:,1);            % first predicted variance is P0
 if isMeas == true % if there are measurements 
-    z = [x_meas,y_meas,theta_meas];               % given z(1); z(2) in MATLAB
+    z = [x_meas;y_meas;theta_meas];     
 end
 
-%% 1b
-% Prior with Jacobian matrices A,L
+%% JACOBIANS FROM STATE
 
 % THE PRIOR UPDATE
 %   Xpm(k) = q(k-1)(Xmm(k-1),u(k-1),v(k-1))                     % predicted mean
@@ -163,7 +149,7 @@ end
 % JACOBIAN L MATRIX
 % L = eye(3)
 
-%% 1c
+%% JACOBIANS FROM MEASUREMENTS
 % Measurement with Jacobian matrices H,M
 
 % THE MEASUREMENT UPDATE
@@ -204,19 +190,13 @@ end
 % M = eye(3)
 
 
-%% 1d 
-% SOLVE IT YO: xmhat(1) given z(1) = 0.5 
-
-
-%   q(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
-%                       x2(k-1) + vel(k-1)*sin(x3(k-1))*dt + v2(k-1);
-%                       x3(k-1) + (vel(k-1)/B)*tan(gamma(k-1))*dt + v3(k-1)] 
+%% PREDICTION AND MEASUREMENT
 
 % Xpm(:,2) = q(Xmm(k-1),v(k-1) = 0)
 Xpm(:,2) = [Xmm(1,1) + vel*cos(Xmm(3,1))*dt;
             Xmm(2,1) + vel*sin(Xmm(3,1))*dt;
             Xmm(3,1) + (vel/B)*tan(gamma)*dt]; % Solve for the predicted Mean
-        
+
 if isMeas == true % if there are measurement values, update... 
 %   A(k-1) = pd_q_k-1_(Xmm(k-1),u(k-1),v(k-1)) / pd(x)      % Jacobian A
      A = [1, 0, 0; 
@@ -226,7 +206,7 @@ if isMeas == true % if there are measurement values, update...
 %   L(k-1) = pd_q_k-1_(Xmm(k-1),u(k-1),v(k-1)) / pd(v)      % Jacobian L
     L = eye(3);    % JACOBIAN L
     
-    Xpv(:,:,2) = A*Xmv(:,:,1)*A + L*V*L'; % Solve for the predicted Variance
+    Xpv(:,:,2) = A*Xmv(:,:,1)*A' + L*V*L'; % Solve for the predicted Variance
 
     %   H(k) = pd_h_k(Xpm(k),w(k)) / pd(x)
     H = [1, 0, 0;
@@ -237,12 +217,8 @@ if isMeas == true % if there are measurement values, update...
     M = eye(3); % JACOBIAN M
     
     K(:,:,2) = (Xpv(:,:,2)*H')*inv(H*Xpv(:,:,2)*H' + M*W*M');    % Kalman Gain
-%   h(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k)) + w1(k);
-%                   x2(k)+ 0.5*B*sin(x3(k)) + w1(k);
-%                   x3(k) + w3(k)];  
-
     % Xmm(:,k) = Xpm(:,k) + K(k)*(z(k) - hk(Xpm(k),w(k) = 0))    
-    Xmm(:,2) = Xpm(:,2) + K(:,:,2)*(z' - [Xpm(1,2)+ 0.5*B*cos(Xpm(3,2)); Xpm(2,2)+ 0.5*B*sin(Xpm(3,2)); Xpm(3,2)]); % Solve for the measured mean
+    Xmm(:,2) = Xpm(:,2) + K(:,:,2)*(z - [Xpm(1,2)+ 0.5*B*cos(Xpm(3,2)); Xpm(2,2)+ 0.5*B*sin(Xpm(3,2)); Xpm(3,2)]); % Solve for the measured mean
     % how do we use this?
     Xmv(:,:,2) = (eye(size(K,1)) - K(:,:,2)*H)*Xpv(:,:,2);       % solve for measured variance of y
     Xmv = Xmv(:,:,2); 
@@ -265,16 +241,14 @@ end
 
 internalStateOut.x = x;
 internalStateOut.y = y;
-% disp(theta)
 internalStateOut.Xmv = Xmv;
-% disp(Xmv)
 
 % invtan(theta) = dy/dx
 theta = atan((internalStateOut.y -internalStateIn.y) / (internalStateOut.x-internalStateIn.x));
 internalStateOut.theta = theta;
-%theta_xy = atan((internalStateOut.y -internalStateIn.y) / (internalStateOut.x-internalStateIn.x));
-%internalStateOut.theta = mean([theta,theta_xy]);
 
 
 end
+
+%%
 

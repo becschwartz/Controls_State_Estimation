@@ -11,8 +11,8 @@
 %%
 % Provide the index of the experimental run you would like to use. Note
 % that using "0" means that you will load the measurement calibration data.
-
-experimentalRun = 2;    
+tic
+experimentalRun = 1;    
 fprintf(['Loading the data file #' num2str(experimentalRun) ' \n']);
 filename = ['data/run_' num2str(experimentalRun,'%03d') '.csv'];
 experimentalData = csvread(filename);
@@ -136,3 +136,4 @@ xlabel('Time [s]');
 
 %%
 fprintf('Done \n');
+toc
