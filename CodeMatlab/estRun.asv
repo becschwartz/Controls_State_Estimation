@@ -70,16 +70,15 @@ end
 % Use the uncented transform to predict E[x(1)] and Var[x(1)]
 
 % UNSCENTED TRANSFORM
-% STEP 1 PRIOR UPDATE
+% STEP 1
 % Define 2n sigma points (sx) for i in {0,1,2,...,2n-1}
-%	sXm,i = E[x] + (sqrt(n*Var[x])),i
-%   sXm,n+1 = E[x] - (sqrt(n*Var[x])),i
+%	sx,i = E[x] + (sqrt(n*Var[x])),i
+%   sx,i+1 = E[x] - (sqrt(n*Var[x])),i
 
-% Compute prior stats (with additive noise)
-%   sXp,i = q_k-1(sXm,i) for all sigma points
-
-% STEP 2 MEASUREMENT UPDATE
-% 
+% STEP 2
+% Define transformed sigma points, sy,i
+%   sy,i = g(sx,i) for i in {0,1,...,2n-1}
+%   where y = g(x) 
 
 % STEP 3
 % Approximate the mean and variance 

@@ -61,42 +61,23 @@ end
 
 
 %%
-% Design UKF for this 3 state nonlin sys and compute its posteriori
+% Design an EKF for this 2 state nonlin sys and compute its posteriori
 % estimate, Xmm = [x;y;theta] = [x1,x2,x3] , given measurements 
 
 % BECCA NOTE
-% UKF, Unscented Kalman Filter is the Kalman filter for nonlinear systems. 
-
-% Use the uncented transform to predict E[x(1)] and Var[x(1)]
-
-% UNSCENTED TRANSFORM
-% STEP 1 PRIOR UPDATE
-% Define 2n sigma points (sx) for i in {0,1,2,...,2n-1}
-%	sXm,i = E[x] + (sqrt(n*Var[x])),i
-%   sXm,n+1 = E[x] - (sqrt(n*Var[x])),i
-
-% Compute prior stats (with additive noise)
-%   sXp,i = q_k-1(sXm,i) for all sigma points
-
-% STEP 2 MEASUREMENT UPDATE
-% 
-
-% STEP 3
-% Approximate the mean and variance 
-%   E[y] ~= sum from 0 to 2n-1 of (1/2n)*sy,i
-%   Var[y] ~= sum from 0 to 2n-1 of (1/2n)*(sy,i-E[y])*(sy,i-E[y])'
+% EKF, Extended Kalman Filter is the Kalman filter for nonlinear systems. 
 
 %   x(k) = q(x(k-1),u(k-1),v(k-1))
 %   z(k) = h(x(k),w(k))
 
-
+% note that there is uncertainty in all these 
 % where
-%   x(k) = q_k-1(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
-%                                  x2(k-1) + vel(k-1)*sin(x3(k-1))*dt + v2(k-1);
-%                                  x3(k-1) + (vel(k-1)/B)*tan(gamma(k-1))*dt + v3(k-1)]
-%   z(k) = hk(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k)) + w1(k);
-%                           x2(k)+ 0.5*B*sin(x3(k)) + w1(k);
-%                           x3(k) + w3(k)];
+%   q(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
+%                       x2(k-1) + vel(k-1)*sin(x3(k-1))*dt + v2(k-1);
+%                       x3(k-1) + (vel(k-1)/B)*tan(gamma(k-1))*dt + v3(k-1)]
+%   h(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k)) + w1(k);
+%                   x2(k)+ 0.5*B*sin(x3(k)) + w1(k);
+%                   x3(k) + w3(k)];
 
 
 %% INIT
@@ -127,7 +108,7 @@ V = diag([0.01,0.01,0.01]);    % variance of sensor noise
 W = diag([0.01,0.01,0.01]);    % variance of process noise
 v = [0;0;0];      % initial mean of process noise
 w = 0;           % initial mean of measurement noise
-n = 2;           % from step x to x+1 is 2 steps
+n = 2; 
 
 % Initialization of variables
 Xpm = zeros(size(x0,1),n);              % Predicted Mean of x
@@ -136,7 +117,6 @@ Xpv = zeros(size(P0,1),size(P0,2),n);   % Predicted Variance of x
 Xmv = zeros(size(P0,1),size(P0,2),n);   % Measured Variance of x
 K = zeros(size(P0,1),size(P0,2),n);      % Kalman gain
 z = zeros(size(x0,1),n);
-sXm = zeros(size(x0,1),n);
 
 Xmm(:,1) = x0;              % first measurement is x0
 Xmv(:,:,1) = P0(:,:,1);            % first predicted variance is P0
@@ -144,28 +124,82 @@ if isMeas == true % if there are measurements
     z = [x_meas,y_meas,theta];               % given z(1); z(2) in MATLAB
 end
 
-%% 1. PRIOR UPDATE
-% STEP 1
-% Define 2n sigma points (sx) for i in {0,1,2,...,2n-1}
-%	sx,i = E[x] + (sqrt(n*Var[x])),i
-%   sx,i+1 = E[x] - (sqrt(n*Var[x])),i
+%% 1b
+% Prior with Jacobian matrices A,L
 
-% S1, Define 2n sigma points
-% only have 6 sigma points since x has x,y,theta (n = 3)
+% THE PRIOR UPDATE
+%   Xpm(k) = q(k-1)(Xmm(k-1),u(k-1),v(k-1))                     % predicted mean
+%   Xpv(k) = A(k-1)*Xmm(k-1)*A'(k-1) + L(k-1)*V(k-1)*L'(k-1)  % predicted variance
+% where pd is partial deriv...
+%   A(k-1) = pd_q_k-1_(Xmm(k-1),u(k-1),v(k-1)) / pd(x)      % Jacobian A
+%   L(k-1) = pd_q_k-1_(Xmm(k-1),u(k-1),v(k-1)) / pd(v)      % Jacobian L
 
-% generate sigma points
-sXm(:,1) = Xmm(:,1) + (sqrt(n*Xmv(:,:,1)));
-sXm(:,2) = Xmm(:,1) - (sqrt(n*Xmv(:,:,1)));
+% Remember, we have
+%   x(k) = q(x(k-1),v(k-1))
+%   z(k) = h(x(k),w(k))
+% where
+%   q(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
+%                       x2(k-1) + vel(k-1)*sin(x3(k-1))*dt + v2(k-1);
+%                       x3(k-1) + (vel(k-1)/B)*tan(gamma(k-1))*dt + v3(k-1)]
 
-% compute the prior sigma points
-sy(1) = -sx(1) +2*abs(sx(1));
-sy(2) = -sx(2) +2*abs(sx(2));
+% A calculated using partial derivatives... 
+% A1 = pd(q(x,v))/x1 = [1; 0; -vel(k-1)*dt*sin((x3(k-1))]
+% A2 = pd(q(x,v))/x2 = [0; 1; vel(k-1)*dt*cos((x3(k-1))]
+% A3 = pd(q(x,v))/x3 = [0; 0; 1]
 
-%% 2. MEASUREMENT UPDATE
+% JACOBIAN A MATRIX
+% A(k-1) = [1, 0, 0; 
+%           0, 1, 0;
+%           -vel(k-1)*dt*sin((x3(k-1)), vel(k-1)*dt*cos((x3(k-1)), 1];
 
-% S2, Define transform of signma points
+
+% L calculated using partial derivatives...
+% L1 = pd(q(x,v))/v1 = [1;0;0]
+% L2 = pd(q(x,v))/v2 = [0;1;0]
+% L3 = pd(q(x,v))/v3 = [0;0;1]
+
+% JACOBIAN L MATRIX
+% L = eye(3)
+
+%% 1c
+% Measurement with Jacobian matrices H,M
+
+% THE MEASUREMENT UPDATE
+%   K(:,k) = Xpv(:,:,k)*H(:,:,k)'*inv(H(:,:,k)*Xpv(:,:,k)*H(:,:,k)' +
+%       M(:,:,k)*W*M(:,:,k)');    % Kalman Gain
+%   Xmm(:,k) = Xpm(:,k) + K(:,k)*(z(:,k) - h_k(Xpm(:,k),w(k));   % mean meas
+%   Xmv(:,:,k) = (eye(size(K,1)) - K(:,k)*H(:,:,k)*Xpv(:,:,k); % meav var
+% where pd is partial deriv...
+%   H(k) = pd_h_k(Xpm(k),w(k)) / pd(x)
+%   M(k) = pd_h_k(Xpm(k),w(k)) / pd(w)
+
+% Remember, we have
+%   x(k) = q(x(k-1),v(k-1))
+%   z(k) = h(x(k),w(k))
+% where
+%   z = h(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k)) + w1(k);
+%                       x2(k)+ 0.5*B*sin(x3(k)) + w2(k);
+%                       x3(k) + w3(k)];
+
+% H calculated using partial derivatives... 
+% H1 = pd(h(xp,w))/x1 = [1; 0; -0.5*B*sin(x3(k))]
+% H2 = pd(h(xp,w))/x2 = [0; 1; 0.5*B*cos(x3(k))]
+% H3 = pd(h(xp,w))/x3 = [0; 0; 1]
+
+% JACOBIAN H MATRIX
+% H(k) = [1, 0, 0;
+%         0, 1, 0;
+%        -0.5*B*sin(x3(k)), 0.5*B*cos(x3(k)), 1]
 
 
+% PROBABLY CHANGE
+% M calculated using partial derivatives...
+% M1 = pd(h(xp,w))/w1 = [1;0;0]
+% M2 = pd(h(xp,w))/w2 = [0;1;0]
+% M3 = pd(h(xp,w))/w3 = [0;0;1]
+
+% JACOBIAN M MATRIX
+% M = eye(3)
 
 
 %% 1d 
