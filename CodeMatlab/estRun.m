@@ -56,7 +56,7 @@ if ~isnan(measurement(1)) & ~isnan(measurement(2))
     y_meas = measurement(2);
 else
     isMeas = false; % no measurement given
-    disp('nomeas')
+    %disp('nomeas')
 end
 
 
@@ -145,7 +145,7 @@ nn = 2;           % from step x to x+1 is 2 steps
 Xpm = zeros(size(x0,1),nn);              % Predicted Mean of x
 Xmm = zeros(size(x0,1),nn);              % measured Mean of x
 Xpv = zeros(size(P0,1),size(P0,2),nn);   % Predicted Variance of x
-Xmv = zeros(size(P0,1),size(P0,2),n);   % Measured Variance of x
+Xmv = zeros(size(P0,1),size(P0,2),nn);   % Measured Variance of x
 K = zeros(size(P0,1),size(P0,2),nn);      % Kalman gain
 z = zeros(size(x0,1),nn);
 sXm = zeros(size(x0,1),nn);
@@ -171,8 +171,8 @@ n = 3; % 3 dimensions, x,y,theta
 % Define 2n sigma points (sx) for i in {0,1,2,...,2n-1}
 %	sXm(k-1),i = E[x] + (sqrt(n*Var[x])),i
 %   sXm(k-1),n+1 = E[x] - (sqrt(n*Var[x])),i
-sXm(:,1) = Xmm(:,1) + (sqrt(n*Xmv(:,:,1))); % [x1;y1;theta1]
-sXm(:,2) = Xmm(:,1) - (sqrt(n*Xmv(:,:,1))); % [x2;y2;theta2]
+sXm(:,1) = Xmm(:,1) + (diag(sqrt(n*Xmv(:,:,1)))); % [x1;y1;theta1]
+sXm(:,2) = Xmm(:,1) - (diag(sqrt(n*Xmv(:,:,1)))); % [x2;y2;theta2]
 
 % Compute prior stats (with additive noise)
 %   sXp(k),i = q_k-1(sXm,i) for all sigma points
@@ -187,8 +187,8 @@ sXp(:,2) = [sXm(1,2) + vel*cos(sXm(3,2))*dt;
 %   Xpm = sum 0 to 2n-1 of (1/2n)*sXp(k),i
 %   Xpv = sum 0 to 2n-1 of (1/2n)*(sXp(k),i-Xpm(k))*(sXp(k),i-Xpm(k))' + V
 for i=1:nn % loop twice
-    Xpm(:,i) = Xpm + (1/(2*n))*sXp(:,i); 
-    Xpv(:,:,i) =  Xpv + (1/(2*n))*(sXp(:,i)-Xpm(:,i))*(sXp(:,i)-Xpm(:,i))' + V;
+    Xpm(:,i) = Xpm(:,i) + (1/(2*n))*sXp(:,i); 
+    Xpv(:,:,i) =  Xpv(:,:,i) + (1/(2*n))*(sXp(:,i)-Xpm(:,i))*(sXp(:,i)-Xpm(:,i))' + V;
 end
 
 
@@ -200,75 +200,28 @@ end
 %   z(k) = hk(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k));
 %                           x2(k)+ 0.5*B*sin(x3(k));
 %                           x3(k) + w3(k)];
+if isMeas == true
+    % STEP 2 MEASUREMENT UPDATE
+    % generate sigma points for the measurements
+    %   sZp(k),i = h_k-1(sXp(k),i) for all sigma points
+    sZp(:,1) = [sXp(1,1) + 0.5*B*cos(sXp(3,1))*dt; 
+                sXp(2,1) + 0.5*B*sin(sXp(3,1))*dt;
+                sXp(3,1)];      
+    sZp(:,2) = [sXp(1,2) + 0.5*B*cos(sXp(3,2))*dt; 
+                sXp(2,2) + 0.5*B*sin(sXp(3,2))*dt;
+                sXp(3,2)];
 
-% STEP 2 MEASUREMENT UPDATE
-% generate sigma points for the measurements
-%   sZp(k),i = h_k-1(sXp(k),i) for all sigma points
-sZp(:,1) = [sXp(1,1) + 0.5*B*cos(sXp(3,1))*dt; 
-            sXp(2,1) + 0.5*B*sin(sXp(3,1))*dt;
-            sXp(3,1)];      
-sZp(:,2) = [sXp(1,2) + 0.5*B*cos(sXp(3,2))*dt; 
-            sXp(2,2) + 0.5*B*sin(sXp(3,2))*dt;
-            sXp(3,2)];
+    % Compute expected measurement, covariance ZZ, cross covariance XZ
+    for i=1:nn % loop twice
+        Zpm(:,i) = Zpm(:,i) + (1/(2*n))*sXp(:,i); 
+        ZZpv(:,:,i) =  ZZpv(:,:,i) + (1/(2*n))*(sZp(:,i)-Zpm(:,i))*(sZp(:,i)-Zpm(:,i))' + W;
+        XZpv(:,:,i) =  XZpv(:,:,i) + (1/(2*n))*(sXp(:,i)-Xpm(:,i))*(sZp(:,i)-Zpm(:,i))';
+    end
 
-% Compute expected measurement, covariance ZZ, cross covariance XZ
-for i=1:nn % loop twice
-    Zpm(:,i) = Zpm + (1/(2*n))*sXp(:,i); 
-    ZZpv(:,:,i) =  ZZpv + (1/(2*n))*(sZp(:,i)-Zpm(:,i))*(sZp(:,i)-Zpm(:,i))' + W;
-    XZpv(:,:,i) =  XZpv + (1/(2*n))*(sXp(:,i)-Xpm(:,i))*(sZp(:,i)-Zpm(:,i))';
-end
-
-% Compute the Kalman gain, then Xmm measured mean and Xmv measured variance
-K(:,2) = XZpv(:,:,2)*inv(ZZpv(:,:,2));
-Xmm(:,2) = Xpm(:,2) + K(:,2)*(z' - Zpm(:,k)); 
-Xmv(:,:,2) = Xpv(:,:,2) - K(:,2)*ZZpv(:,:,2)*K(:,2)';
-
-
-
-
-
-
-%% 1d 
-% SOLVE IT YO: xmhat(1) given z(1) = 0.5 
-
-
-%   q(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
-%                       x2(k-1) + vel(k-1)*sin(x3(k-1))*dt + v2(k-1);
-%                       x3(k-1) + (vel(k-1)/B)*tan(gamma(k-1))*dt + v3(k-1)] 
-
-% Xpm(:,2) = q(Xmm(k-1),v(k-1) = 0)
-Xpm(:,2) = [Xmm(1,1) + vel*cos(Xmm(3,1))*dt;
-            Xmm(2,1) + vel*sin(Xmm(3,1))*dt;
-            Xmm(3,1) + (vel/B)*tan(gamma)*dt]; % Solve for the predicted Mean
-        
-if isMeas == true % if there are measurement values, update... 
-%   A(k-1) = pd_q_k-1_(Xmm(k-1),u(k-1),v(k-1)) / pd(x)      % Jacobian A
-     A = [1, 0, 0; 
-          0, 1, 0;
-         -vel*dt*sin(Xmm(3)), vel*dt*cos(Xmm(3)), 1];
-     
-%   L(k-1) = pd_q_k-1_(Xmm(k-1),u(k-1),v(k-1)) / pd(v)      % Jacobian L
-    L = eye(3);    % JACOBIAN L
-    
-    Xpv(:,:,2) = A*Xmv(:,:,1)*A + L*V*L'; % Solve for the predicted Variance
-
-    %   H(k) = pd_h_k(Xpm(k),w(k)) / pd(x)
-    H = [1, 0, 0;
-         0, 1, 0;
-        -0.5*B*sin(Xmm(3)), 0.5*B*cos(Xmm(3)), 1]; % JACOBIAN H
-    
-%   M(k) = pd_h_k(Xpm(k),w(k)) / pd(w)   
-    M = eye(3); % JACOBIAN M
-    
-    K(:,:,2) = (Xpv(:,:,2)*H')*inv(H*Xpv(:,:,2)*H' + M*W*M');    % Kalman Gain
-%   h(x(k),w(k)) = [x1(k)+ 0.5*B*cos(x3(k)) + w1(k);
-%                   x2(k)+ 0.5*B*sin(x3(k)) + w1(k);
-%                   x3(k) + w3(k)];  
-
-    % Xmm(:,k) = Xpm(:,k) + K(k)*(z(k) - hk(Xpm(k),w(k) = 0))    
-    Xmm(:,2) = Xpm(:,2) + K(:,:,2)*(z' - [Xpm(1,2)+ 0.5*B*cos(Xpm(3,2)); Xpm(2,2)+ 0.5*B*sin(Xpm(3,2)); Xpm(3,2)]); % Solve for the measured mean
-    % how do we use this?
-    Xmv(:,:,2) = (eye(size(K,1)) - K(:,:,2)*H)*Xpv(:,:,2);       % solve for measured variance of y
+    % Compute the Kalman gain, then Xmm measured mean and Xmv measured variance
+    K(:,:,2) = XZpv(:,:,2)*inv(ZZpv(:,:,2));
+    Xmm(:,2) = Xpm(:,2) + K(:,:,2)*(z' - Zpm(:,2)); 
+    Xmv(:,:,2) = Xpv(:,:,2) - K(:,:,2)*ZZpv(:,:,2)*K(:,:,2)';
     Xmv = Xmv(:,:,2); 
     x = Xmm(1,2);
     y = Xmm(2,2);
@@ -279,6 +232,7 @@ else
     y = Xpm(2,2);
     theta = Xpm(3,2);
 end
+
 
 
 
