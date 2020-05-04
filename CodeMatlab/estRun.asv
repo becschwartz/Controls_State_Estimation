@@ -67,27 +67,40 @@ end
 % BECCA NOTE
 % UKF, Unscented Kalman Filter is the Kalman filter for nonlinear systems. 
 
-% Use the uncented transform to predict E[x(1)] and Var[x(1)]
+% System
+%   x(k) = qk-1(x(k-1) + v(k-1))
+%   z(k) = hk(x(k)) + w(k)
+
+% V is variance of process noise 
+% W is variance of sensor noise
 
 % UNSCENTED TRANSFORM
-% STEP 1
+% STEP 1 PRIOR UPDATE
 % Define 2n sigma points (sx) for i in {0,1,2,...,2n-1}
-%	sx,i = E[x] + (sqrt(n*Var[x])),i
-%   sx,i+1 = E[x] - (sqrt(n*Var[x])),i
+%	sXm(k-1),i = E[x] + (sqrt(n*Var[x])),i
+%   sXm(k-1),n+1 = E[x] - (sqrt(n*Var[x])),i
 
-% STEP 2
-% Define transformed sigma points, sy,i
-%   sy,i = g(sx,i) for i in {0,1,...,2n-1}
-%   where y = g(x) 
+% Compute prior stats (with additive noise)
+%   sXp(k),i = q_k-1(sXm,i) for all sigma points
 
-% STEP 3
-% Approximate the mean and variance 
-%   E[y] ~= sum from 0 to 2n-1 of (1/2n)*sy,i
-%   Var[y] ~= sum from 0 to 2n-1 of (1/2n)*(sy,i-E[y])*(sy,i-E[y])'
+% Compute prior statistics, Xpm predicted mean, Xpv predicted var
+%   Xpm = sum 0 to 2n-1 of (1/2n)*sXp(k),i
+%   Xpv = sum 0 to 2n-1 of (1/2n)*(sXp(k),i-Xpm(k))*(sXp(k),i-Xpm(k))' + V
 
-%   x(k) = q(x(k-1),u(k-1),v(k-1))
-%   z(k) = h(x(k),w(k))
 
+% STEP 2 MEASUREMENT UPDATE
+% generate sigma points for the measurements
+%   sZp(k),i = h_k-1(sXp(k),i) for all sigma points
+
+% Compute expected measurement, covariance ZZ, cross covariance XZ
+%   Zpm(k) = sum 0 to 2n-1 of (1/2n)*sZp(k),i
+%   ZZpv(k) = sum 0 to 2n-1 of (1/2n)*(sZp(k),i-Zpm(k))*(sZp(k),i-Zpm(k))' + W
+%   XZpv(k) = sum 0 to 2n-1 of (1/2n)*(sXp(k),i-Xpm(k))*(sZp(k),i-Zpm(k))'
+
+% Compute the Kalman gain, then Xmm measured mean and Xmv measured variance
+% K(k) = XZpv(k)*inv(ZZpv(k))
+% Xmm(k) = Xpm(k) + K(k)*(z(k) - Zpm(k))
+% Xmv(k) = Xpv(k) - K(k)*ZZpv(k)*K(k)'
 
 % where
 %   x(k) = q_k-1(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
@@ -126,16 +139,17 @@ V = diag([0.01,0.01,0.01]);    % variance of sensor noise
 W = diag([0.01,0.01,0.01]);    % variance of process noise
 v = [0;0;0];      % initial mean of process noise
 w = 0;           % initial mean of measurement noise
-n = 2;           % from step x to x+1 is 2 steps
+nn = 2;           % from step x to x+1 is 2 steps
 
 % Initialization of variables
-Xpm = zeros(size(x0,1),n);              % Predicted Mean of x
-Xmm = zeros(size(x0,1),n);              % measured Mean of x
-Xpv = zeros(size(P0,1),size(P0,2),n);   % Predicted Variance of x
+Xpm = zeros(size(x0,1),nn);              % Predicted Mean of x
+Xmm = zeros(size(x0,1),nn);              % measured Mean of x
+Xpv = zeros(size(P0,1),size(P0,2),nn);   % Predicted Variance of x
 Xmv = zeros(size(P0,1),size(P0,2),n);   % Measured Variance of x
-K = zeros(size(P0,1),size(P0,2),n);      % Kalman gain
-z = zeros(size(x0,1),n);
-sXm = zeros(size(x0,1),n);
+K = zeros(size(P0,1),size(P0,2),nn);      % Kalman gain
+z = zeros(size(x0,1),nn);
+sXm = zeros(size(x0,1),nn);
+sXp = zeros(size(x0,1),nn);
 
 Xmm(:,1) = x0;              % first measurement is x0
 Xmv(:,:,1) = P0(:,:,1);            % first predicted variance is P0
@@ -143,22 +157,39 @@ if isMeas == true % if there are measurements
     z = [x_meas,y_meas,theta];               % given z(1); z(2) in MATLAB
 end
 
+n = 3; % 3 dimensions, x,y,theta
+
+
 %% 1. PRIOR UPDATE
-% STEP 1
+%   x(k) = q_k-1(x(k-1),v(k-1)) = [x1(k-1) + vel(k-1)*cos(x3(k-1))*dt + v1(k-1);
+%                                  x2(k-1) + vel(k-1)*sin(x3(k-1))*dt + v2(k-1);
+%                                  x3(k-1) + (vel(k-1)/B)*tan(gamma(k-1))*dt + v3(k-1)]
+
 % Define 2n sigma points (sx) for i in {0,1,2,...,2n-1}
-%	sx,i = E[x] + (sqrt(n*Var[x])),i
-%   sx,i+1 = E[x] - (sqrt(n*Var[x])),i
-
-% S1, Define 2n sigma points
-% only have 6 sigma points since x has x,y,theta (n = 3)
-
-% generate sigma points
+%	sXm(k-1),i = E[x] + (sqrt(n*Var[x])),i
+%   sXm(k-1),n+1 = E[x] - (sqrt(n*Var[x])),i
 sXm(:,1) = Xmm(:,1) + (sqrt(n*Xmv(:,:,1)));
 sXm(:,2) = Xmm(:,1) - (sqrt(n*Xmv(:,:,1)));
 
+% Compute prior stats (with additive noise)
+%   sXp(k),i = q_k-1(sXm,i) for all sigma points
+sXp(:,1) = [sXm(1,1) + vel*cos(sXm(3,1))*dt; 
+            sXm(2,1) + vel*sin(sXm(3,1))*dt;
+            sXm(3,1) + (vel/B)*tan(gamma)*dt];      
+sXp(:,2) = [sXm(1,2) + vel*cos(sXm(3,2))*dt; 
+            sXm(2,2) + vel*sin(sXm(3,2))*dt;
+            sXm(3,2) + (vel/B)*tan(gamma)*dt];
+
+% Compute prior statistics, Xpm predicted mean, Xpv predicted var
+%   Xpm = sum 0 to 2n-1 of (1/2n)*sXp(k),i
+%   Xpv = sum 0 to 2n-1 of (1/2n)*(sXp(k),i-Xpm(k))*(sXp(k),i-Xpm(k))' + V
+for i=1:(2*n-1)+1
+    Xpm = Xpm + (1/(2*n))*sXp(:,:);
+end
+
+
 % compute the prior sigma points
-sy(1) = -sx(1) +2*abs(sx(1));
-sy(2) = -sx(2) +2*abs(sx(2));
+
 
 %% 2. MEASUREMENT UPDATE
 
