@@ -39,7 +39,7 @@ dt = experimentalData(2,1) - experimentalData(1,1);
 loops = 0;
 for k = 1:numDataPoints
     loops = loops + 1; 
-    fprintf('This is loop # %d\n',loops) % track number of loops
+    %fprintf('This is loop # %d\n',loops) % track number of loops
     t = experimentalData(k,1);
     gamma = experimentalData(k,2);
     omega = experimentalData(k,3);
