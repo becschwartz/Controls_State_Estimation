@@ -56,7 +56,7 @@ if ~isnan(measurement(1)) & ~isnan(measurement(2))
     y_meas = measurement(2);
 else
     isMeas = false; % no measurement given
-    %disp('nomeas')
+    disp('nomeas')
 end
 
 
@@ -128,31 +128,32 @@ if time == 0
     P0 = diag([var_r + var_B, var_r + var_B, var_B]);   % initial variance
 else
     P0 = Xmv;
-    % disp(Xmv)
+    disp('Xmv')
+    disp(Xmv)
 end
 
 
 % for V, consider variance of r for measurement values
 % keeping var_r as variance for theta just as a placeholder
-V = diag([0.01,0.01,0.01]);    % variance of sensor noise
+V = diag([0.1,0.1,0.1]);    % variance of sensor noise
 
-W = diag([0.01,0.01,0.01]);    % variance of process noise
+W = diag([0.1,0.1,0.1]);    % variance of process noise
 v = [0;0;0];      % initial mean of process noise
 w = 0;           % initial mean of measurement noise
 nn = 2;           % from step x to x+1 is 2 steps
 
 % Initialization of variables
-Xpm = zeros(size(x0,1),nn);              % Predicted Mean of x
+Xpm = zeros(size(x0,1),1);              % Predicted Mean of x
 Xmm = zeros(size(x0,1),nn);              % measured Mean of x
-Xpv = zeros(size(P0,1),size(P0,2),nn);   % Predicted Variance of x
+Xpv = zeros(size(P0,1),size(P0,2),1);   % Predicted Variance of x
 Xmv = zeros(size(P0,1),size(P0,2),nn);   % Measured Variance of x
 K = zeros(size(P0,1),size(P0,2),nn);      % Kalman gain
 z = zeros(size(x0,1),nn);
 sXm = zeros(size(x0,1),nn);
 sXp = zeros(size(x0,1),nn);
-Zpm = zeros(size(x0,1),nn);
-ZZpv = zeros(size(P0,1),size(P0,2),nn);
-XZpv = zeros(size(P0,1),size(P0,2),nn);
+Zpm = zeros(size(x0,1),1);
+ZZpv = zeros(size(P0,1),size(P0,2),1);
+XZpv = zeros(size(P0,1),size(P0,2),1);
 
 Xmm(:,1) = x0;              % first measurement is x0
 Xmv(:,:,1) = P0(:,:,1);            % first predicted variance is P0
@@ -171,8 +172,8 @@ n = 3; % 3 dimensions, x,y,theta
 % Define 2n sigma points (sx) for i in {0,1,2,...,2n-1}
 %	sXm(k-1),i = E[x] + (sqrt(n*Var[x])),i
 %   sXm(k-1),n+1 = E[x] - (sqrt(n*Var[x])),i
-sXm(:,1) = Xmm(:,1) + (diag(sqrt(n*Xmv(:,:,1)))); % [x1;y1;theta1]
-sXm(:,2) = Xmm(:,1) - (diag(sqrt(n*Xmv(:,:,1)))); % [x2;y2;theta2]
+sXm(:,1) = Xmm(:,1) + diag(sqrt(n*Xmv(:,:,1))); % [x1;y1;theta1]
+sXm(:,2) = Xmm(:,1) - diag(sqrt(n*Xmv(:,:,1))); % [x2;y2;theta2]
 
 % Compute prior stats (with additive noise)
 %   sXp(k),i = q_k-1(sXm,i) for all sigma points
@@ -186,11 +187,13 @@ sXp(:,2) = [sXm(1,2) + vel*cos(sXm(3,2))*dt;
 % Compute prior statistics, Xpm predicted mean, Xpv predicted var
 %   Xpm = sum 0 to 2n-1 of (1/2n)*sXp(k),i
 %   Xpv = sum 0 to 2n-1 of (1/2n)*(sXp(k),i-Xpm(k))*(sXp(k),i-Xpm(k))' + V
-for i=1:nn % loop twice
-    Xpm(:,i) = Xpm(:,i) + (1/(2*n))*sXp(:,i); 
-    Xpv(:,:,i) =  Xpv(:,:,i) + (1/(2*n))*(sXp(:,i)-Xpm(:,i))*(sXp(:,i)-Xpm(:,i))' + V;
+for i = 1:nn
+    Xpm = Xpm + (1/(2*n))*sXp(:,i); 
 end
-
+for i = 1:nn
+    Xpv =  Xpv + (1/(2*n))*(sXp(:,i)-Xpm)*(sXp(:,i)-Xpm)';
+end
+Xpv = Xpv + V;
 
 % compute the prior sigma points
 
@@ -212,25 +215,33 @@ if isMeas == true
                 sXp(3,2)];
 
     % Compute expected measurement, covariance ZZ, cross covariance XZ
-    for i=1:nn % loop twice
-        Zpm(:,i) = Zpm(:,i) + (1/(2*n))*sXp(:,i); 
-        ZZpv(:,:,i) =  ZZpv(:,:,i) + (1/(2*n))*(sZp(:,i)-Zpm(:,i))*(sZp(:,i)-Zpm(:,i))' + W;
-        XZpv(:,:,i) =  XZpv(:,:,i) + (1/(2*n))*(sXp(:,i)-Xpm(:,i))*(sZp(:,i)-Zpm(:,i))';
-    end
+for i = 1:nn
+    Zpm = Zpm + (1/(2*n))*sXp(:,i); 
+end
+
+for i = 1:nn
+    ZZpv =  ZZpv + (1/(2*n))*(sZp(:,i)-Zpm)*(sZp(:,i)-Zpm)';
+end
+ZZpv = ZZpv + W;
+
+for i = 1:nn
+    XZpv =  XZpv + (1/(2*n))*(sXp(:,i)-Xpm)*(sZp(:,i)-Zpm)';
+end
+    
 
     % Compute the Kalman gain, then Xmm measured mean and Xmv measured variance
-    K(:,:,2) = XZpv(:,:,2)*inv(ZZpv(:,:,2));
-    Xmm(:,2) = Xpm(:,2) + K(:,:,2)*(z' - Zpm(:,2)); 
-    Xmv(:,:,2) = Xpv(:,:,2) - K(:,:,2)*ZZpv(:,:,2)*K(:,:,2)';
+    K(:,:,2) = XZpv*inv(ZZpv);
+    Xmm(:,2) = Xpm + K(:,:,2)*(z' - Zpm); 
+    Xmv(:,:,2) = Xpv - K(:,:,2)*ZZpv*K(:,:,2)';
     Xmv = Xmv(:,:,2); 
     x = Xmm(1,2);
     y = Xmm(2,2);
     theta = Xmm(3,2);
 else
     Xmv = Xmv(:,:,1);
-    x = Xpm(1,2);
-    y = Xpm(2,2);
-    theta = Xpm(3,2);
+    x = Xpm(1);
+    y = Xpm(2);
+    theta = Xpm(3);
 end
 
 
@@ -242,11 +253,13 @@ end
 % internalStateIn:
 
 internalStateOut.x = x;
+disp('x')
+disp(x)
 internalStateOut.y = y;
 internalStateOut.theta = theta;
-disp(theta)
+%disp(theta)
 internalStateOut.Xmv = Xmv;
-disp(Xmv)
+%disp(Xmv)
 
 
 
