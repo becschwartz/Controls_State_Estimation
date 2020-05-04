@@ -24,6 +24,7 @@ x = internalStateIn.x;
 y = internalStateIn.y;
 theta = internalStateIn.theta;
 
+
 if time ~= 0
     Xmv = internalStateIn.Xmv;
 end
@@ -39,8 +40,8 @@ r_high = r + 0.05*r;
 var_r = ((r_high - r)/3)^2; % GAUSSIAN NOISE: where 3 is the desired z value on z scale
 vel = 5*pedalSpeed*r; % expected value, non directional linear speed of bike
 
-% Wheel Base
-B = 0.8; % wheel base length (m); uncertainty is +- 10%
+% Base length
+B = 0.8; % bike base length (m); uncertainty is +- 10%
 B_low = B - 0.1*B;
 B_high = B + 0.1*B;
 var_B = ((B_high - B)/3)^2; % GAUSSIAN NOISE: where 3 is the desired z value on z scale
@@ -54,6 +55,7 @@ if ~isnan(measurement(1)) & ~isnan(measurement(2))
     % have a valid measurement
     x_meas = measurement(1);
     y_meas = measurement(2);
+    theta_meas = atan(y_meas/x_meas);
 else
     isMeas = false; % no measurement given
     % disp('nomeas')
@@ -103,9 +105,9 @@ end
 
 % for V, consider variance of r for measurement values
 % keeping var_r as variance for theta just as a placeholder
-V = diag([0.01,0.01,0.01]);    % variance of sensor noise
+V = diag([0.1,0.1,0.1]);    % variance of process noise
 
-W = diag([0.01,0.01,0.01]);    % variance of process noise
+W = diag([0.1,0.1,0.1]);    % variance of sensor noise
 v = [0;0;0];      % initial mean of process noise
 w = 0;           % initial mean of measurement noise
 n = 2; 
@@ -121,7 +123,7 @@ z = zeros(size(x0,1),n);
 Xmm(:,1) = x0;              % first measurement is x0
 Xmv(:,:,1) = P0(:,:,1);            % first predicted variance is P0
 if isMeas == true % if there are measurements 
-    z = [x_meas,y_meas,theta];               % given z(1); z(2) in MATLAB
+    z = [x_meas,y_meas,theta_meas];               % given z(1); z(2) in MATLAB
 end
 
 %% 1b
@@ -263,11 +265,15 @@ end
 
 internalStateOut.x = x;
 internalStateOut.y = y;
-internalStateOut.theta = theta;
 % disp(theta)
 internalStateOut.Xmv = Xmv;
 % disp(Xmv)
 
+% invtan(theta) = dy/dx
+theta = atan((internalStateOut.y -internalStateIn.y) / (internalStateOut.x-internalStateIn.x));
+internalStateOut.theta = theta;
+%theta_xy = atan((internalStateOut.y -internalStateIn.y) / (internalStateOut.x-internalStateIn.x));
+%internalStateOut.theta = mean([theta,theta_xy]);
 
 
 end
